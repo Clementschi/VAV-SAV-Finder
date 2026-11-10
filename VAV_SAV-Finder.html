@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VAV/SAV-Finder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#f3f6f9;--card:#fff;--ink:#14212e;--mute:#5b6b7b;--line:#d5dee7;--vav:#0b5ea8;--vavbg:#e4f0fb;--sav:#13703f;--savbg:#e2f4ea;--warn:#8a5a00;--warnbg:#fff3d6;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#101820;--card:#18232e;--ink:#e6edf3;--mute:#9aabbb;--line:#2b3b4a;--vav:#6db3f2;--vavbg:#14344f;--sav:#5fd08e;--savbg:#12382a;--warn:#f0c15a;--warnbg:#3a2f12}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#101820;--card:#18232e;--ink:#e6edf3;--mute:#9aabbb;--line:#2b3b4a;--vav:#6db3f2;--vavbg:#14344f;--sav:#5fd08e;--savbg:#12382a;--warn:#f0c15a;--warnbg:#3a2f12}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:720px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.5rem;margin:0 0 4px;font-weight:600}
+.sub{color:var(--mute);margin:0 0 16px;font-size:.92rem}
+input{width:100%;font:inherit;font-size:1.05rem;padding:14px 16px;border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+input:focus-visible,button:focus-visible{outline:3px solid var(--vav);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+.chips button{font:inherit;font-size:.88rem;padding:6px 12px;border:1px solid var(--line);border-radius:99px;background:var(--card);color:var(--ink);cursor:pointer}
+.opt{display:flex;gap:8px;align-items:center;margin:10px 0 16px;color:var(--mute);font-size:.92rem}
+.opt input{width:auto;accent-color:var(--vav)}
+.res{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--vav);border-radius:6px;padding:14px 16px;margin:0 0 12px}
+.res.onlyS{border-left-color:var(--sav)}
+.hd{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}
+.code{font-weight:600;font-size:1.3rem}
+.ttl{font-weight:500}
+.lv{border-radius:6px;padding:8px 10px;margin:6px 0;font-size:.93rem}
+.lv b{display:block;margin-bottom:2px}
+.lv.v{background:var(--vavbg)}.lv.v b{color:var(--vav)}
+.lv.s{background:var(--savbg)}.lv.s b{color:var(--sav)}
+.note{background:var(--warnbg);color:var(--ink);border-radius:6px;padding:8px 10px;margin:6px 0;font-size:.88rem}
+.note::before{content:"Hinweis: ";font-weight:600;color:var(--warn)}
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:6px;padding:16px}
+.foot{color:var(--mute);font-size:.8rem;margin-top:24px}
+</style>
+</head>
+<body>
+<main>
+<h1>VAV/SAV-Finder</h1>
+<p class="sub">Diagnose eingeben, Ziffer im Verletzungsartenverzeichnis der DGUV (Stand 27.07.2021) finden.</p>
+<input id="q" type="search" placeholder="z. B. Schenkelhalsfraktur" autocomplete="off" autofocus aria-label="Diagnose">
+<div class="chips" id="chips"></div>
+<label class="opt"><input type="checkbox" id="kind"> Patient ist ein Kind (Kindertraumatologie berücksichtigen)</label>
+<div id="out"></div>
+<p class="foot">Orientierungshilfe auf Basis der Stichwörter des Verzeichnisses, keine verbindliche Zuordnung. Maßgeblich sind der Originaltext, die Erläuterungen und der klinische Befund (Operationsnotwendigkeit, Gefäß-/Nervenbeteiligung, Weichteilschaden, AO-Typ). Der Katalog ist nicht abschließend: Verletzungen ohne Treffer fallen in der Regel unter das DAV.</p>
+</main>
+<script>
+// c=Ziffer, t=Titel, v=VAV-Kriterium, s=SAV-Kriterium, k=Stichwörter, n=Erläuterung, kid=1 nur Kinder
+const D=[
+{c:"1.1",t:"Amputationsverletzungen",v:"Alle totalen/subtotalen Amputationen, auch Großzehe (außer Zehenendglieder). Hand: Ziffer 8.",s:"Bei Replantationsmöglichkeit, operativer Stumpfkorrektur, tiefgehender/ausgedehnter/fortschreitender Entzündung, Weichteiluntergang mit Nekrosen.",k:"amputation,abriss,replantation,stumpf,zehe,fuss,bein,arm"},
+{c:"1.2",t:"Kompartmentsyndrom",v:"Alle Lokalisationen bei Operationsnotwendigkeit oder engmaschiger Überwachung.",s:"Bei tiefgehender/ausgedehnter/fortschreitender Entzündung oder Weichteiluntergang mit Nekrosen.",k:"kompartment,muskelkompression,faszienspaltung"},
+{c:"1.3",t:"Thermische/chemische Schäden (Ausdehnung)",s:"Über 15 % KOF (2. Grades) bzw. über 10 % (3. Grades); abweichende Berechnung bei Kindern.",k:"verbrennung,verbruehung,thermisch,strom,stromverletzung,verletzung chemisch"},
+{c:"1.4",t:"Thermische/chemische Schäden (Kombination)",s:"Mit Inhalationstrauma, relevanten VAV-Verletzungen, Schock, Beteiligung von Händen/Füßen/Gesicht/Anogenital; ausgedehnte Verätzungen (z. B. Flusssäure).",k:"verbrennung,verbruehung,veraetzung,flusssaeure,inhalationstrauma,strom",n:"Schäden ab Grad 2b gehören zum SAV. Einseitige Beteiligung von Hand, Fuß oder Gesicht genügt."},
+{c:"1.5",t:"Weichteilabhebung (Décollement)",v:"Ausgedehnte offene/geschlossene Weichteilabhebungen mit akuten oder drohenden Ernährungsstörungen.",s:"Bei Lappenplastik (gegeben/abzuklären), tiefgehender/ausgedehnter/fortschreitender Entzündung, Weichteiluntergang.",k:"decollement,weichteilabhebung,morel,lavallee,weichteilverletzung,weichteilschaden,lappenplastik"},
+{c:"2.1",t:"Verletzung großer Gefäße",v:"Durchtrennung, Zerreißung, akute Schädigung/Verschluss großer Körperstamm-Gefäße, Transportarterien einer Extremität (inkl. Unterschenkel), große Begleitvenen proximal von Ellenbogen/Knie. Hand/Unterarm: Ziffer 8.",s:"2.2 (S): in Kombination mit Knochen-/Gelenkverletzung, hochgradigem Weichteilschaden, Entzündung, Weichteiluntergang.",k:"gefaess,arterie,vene,aneurysma,dissektion,durchblutung,gefaessverletzung,transportarterie",n:"Gemeint sind Gefäßverletzungen mit operativer/interventioneller Behandlung."},
+{c:"3.1",t:"Rückenmarkverletzung",s:"Verletzungen des Rückenmarks.",k:"rueckenmark,querschnitt,myelon,tetraplegie,paraplegie"},
+{c:"3.2",t:"Nervenwurzel-/Plexusverletzung",s:"Verletzung der Nervenwurzeln oder großen Nervengeflechte von Arm/Bein mit Funktionsausfall.",k:"plexus,nervenwurzel,wurzelausriss,armplexus,plexusparese",n:"Leichte Schädigung ohne Lähmung gehört nicht dazu."},
+{c:"3.3",t:"Stammnerven (rekonstruktionsbedürftig)",s:"Arm: N. radialis, medianus, ulnaris (siehe auch 8). Bein: N. ischiadicus, femoralis, peronaeus, tibialis.",k:"nerv,nervus,radialis,medianus,ulnaris,ischiadicus,femoralis,peronaeus,peroneus,tibialis,nervenverletzung,nervenlaesion"},
+{c:"4.1",t:"Schädel-Hirn-Trauma mittelschwer",v:"Gedecktes SHT ab Grad II (GCS < 13); alle traumatisch bedingten strukturellen Veränderungen oder Blutungen in der Bildgebung (auch bei GCS > 12).",s:"4.2 (S) bei wesentlicher Verschlechterung im Verlauf.",k:"sht,schaedel,hirn,schaedelhirntrauma,gehirn,kopf,blutung intrakraniell,subdural,epidural,kontusion",n:"Commotio ohne Strukturschaden/Blutung ist hier nicht erfasst."},
+{c:"4.2",t:"Schweres SHT / offene Hirnverletzung",s:"Alle offenen Verletzungen mit Hirnbeteiligung; schwere SHT (GCS < 9) mit lokalisierter/diffus-axonaler Verletzung, intrakranieller Blutung, wesentlicher Verschlechterung; Brüche des Gehirnschädels bei Operationsnotwendigkeit.",k:"sht,schaedel,hirn,schaedelhirntrauma,gehirn,schaedelfraktur,impressionsfraktur,diffus axonal,intrakraniell,blutung"},
+{c:"5.1",t:"Brustkorbverletzung",v:"Mit ausgedehnter Lungenbeteiligung, transfusionsbedürftiger Blutung, Atemmechanik-/Gasaustauschstörung, Thoraxdrainage, stumpfer Herzverletzung (Kontusion, Perikarderguss).",s:"Bei Operationsnotwendigkeit oder septischem Verlauf.",k:"thorax,brustkorb,rippe,rippenserie,pneumothorax,haematothorax,lungenkontusion,herzkontusion,perikarderguss,drainage,sternum"},
+{c:"5.2",t:"Bauchverletzung",v:"Bei Operationsnotwendigkeit mit transfusionsbedürftiger Blutung, Hohlorgan- oder parenchymatöser Organverletzung.",k:"bauch,abdomen,milz,leber,niere,darm,hohlorgan,pankreas,milzruptur,leberruptur,harnwege,blase"},
+{c:"6.1",t:"Schaftbrüche im Kindesalter",kid:1,v:"Alle Schaftbrüche an Oberarm, Unterarm (inkl. Monteggia), Oberschenkel, Unterschenkel (auch isoliert Tibia/Fibula) bei Operationsnotwendigkeit.",s:"Bei Gefäß-/Nervenverletzung oder hochgradigem Weichteilschaden.",k:"kind,schaft,oberarmschaft,unterarmschaft,femurschaft,oberschenkelschaft,unterschenkelschaft,tibiaschaft,monteggia,radiusschaft,ulnaschaft,humerusschaft"},
+{c:"6.2",t:"Klavikulafraktur",v:"Bei Operationsnotwendigkeit mit komplexer Form (AO Typ C) oder endständiger (medialer/lateraler) Lokalisation.",s:"Bei Gefäß-/Nervenverletzung oder hochgradigem Weichteilschaden.",k:"klavikula,schluesselbein,clavicula"},
+{c:"6.3",t:"Oberarmschaft (Humerus)",v:"Mehrteilebruch (AO Typ C) oder Etagenfraktur bei Operationsnotwendigkeit.",s:"Bei Gefäß-/Nervenverletzung oder hochgradigem Weichteilschaden.",k:"humerus,oberarm,oberarmschaft,humerusschaft,etagenfraktur"},
+{c:"6.4",t:"Unterarmschaft",v:"Bei Operationsnotwendigkeit mit Typ C, Etagenbruch oder Gelenkbeteiligung (Monteggia, Galeazzi, Essex-Lopresti).",s:"Bei Gefäß-/Nervenverletzung oder hochgradigem Weichteilschaden.",k:"unterarm,radius,ulna,elle,speiche,monteggia,galeazzi,essex,lopresti,unterarmschaft,etagenfraktur"},
+{c:"6.5",t:"Hüftgelenknahe Oberschenkelfraktur",v:"Alle hüftgelenknahen Brüche des Oberschenkels.",s:"Bei Gelenkbeteiligung (z. B. Pipkin), Gefäß-/Nervenverletzung oder hochgradigem Weichteilschaden.",k:"schenkelhals,femurhals,oberschenkelhals,schenkelhalsfraktur,pertrochantaer,per trochantaer,pertrochanter,trochanter,subtrochantaer,hueftnah,hueftgelenknah,proximales femur,femur proximal,pipkin,hueftkopf,coxa",n:"Verlegungspflicht auch bei Op-Frist von 24 h nach G-BA-Richtlinie. Endoprothese bei posttraumatischer Arthrose/Revision: 11.3 (S). Kind: Metaphysenfraktur, siehe 7.1."},
+{c:"6.6",t:"Oberschenkelschaft (Femur)",v:"Brüche des Oberschenkelschafts bei Operationsnotwendigkeit.",s:"Bei Gefäß-/Nervenverletzung, hochgradigem Weichteilschaden oder Kombination mit hüft- oder kniegelenknaher Gelenkfraktur.",k:"femur,oberschenkel,femurschaft,oberschenkelschaft,femurfraktur,oberschenkelfraktur"},
+{c:"6.7",t:"Unterschenkelschaft (Tibia)",v:"Schienbein isoliert oder mit Wadenbein bei Mehrteilebruch (AO Typ C), Etagenbruch oder Gelenkbeteiligung (siehe 7).",s:"Bei Gefäß-/Nervenverletzung oder hochgradigem Weichteilschaden.",k:"unterschenkel,tibia,schienbein,unterschenkelschaft,tibiaschaft,etagenfraktur,unterschenkelfraktur"},
+{c:"6.8",t:"Mehrere Röhrenknochen einer Extremität",v:"Brüche mehrerer Röhrenknochen an derselben Extremität bei Operationsnotwendigkeit (z. B. Humerus und Mittelhandknochen rechts).",s:"Bei komplexen Formen (mind. zwei Brüche Typ C), hochgradigem Weichteilschaden, Weichteiluntergang, Kompartmentsyndrom.",k:"mehrere roehrenknochen,roehrenknochen,extremitaet,mehrfachfraktur"},
+{c:"7.1",t:"Gelenkverletzungen beim Kind",kid:1,v:"Verrenkungen oder gelenkbetreffende Brüche mit möglicher Wachstumsstörung (Aitken II/III) bei Operationsnotwendigkeit, u. a. Oberarmkondylen, Ellenbogen (Abriss Epikondylen), Patellaluxation, Kreuzband/Eminentia-Ausriss, distale Tibia, Innen- und Außenknöchel (gleichzeitig), Metaphysenbrüche (proximaler/suprakondylärer Humerus, Radiushals, Schenkelhals, distaler Femur, proximale Tibia).",s:"Bei Gefäß-/Nervenverletzung oder hochgradigem Weichteilschaden.",k:"kind,suprakondylaer,humerus,radiushals,schenkelhals,oberschenkelhals,metaphyse,epikondylus,kondylus,ellenbogen,patellaluxation,eminentia,aitken,wachstumsfuge,epiphyse,knoechel,innenknoechel,aussenknoechel",n:"Isolierter Innen- oder Außenknöchelbruch im Bereich der Metaphyse fällt ebenfalls unter 7.1."},
+{c:"7.2",t:"Sternoklavikulargelenk",s:"Verrenkungen des Brustbein-Schlüsselbein-Gelenks bei Operationsnotwendigkeit.",k:"sternoklavikular,sc gelenk,brustbein,sternoclavikular"},
+{c:"7.3",t:"Schultereckgelenk",v:"Verrenkungen oder Brüche des Schultereckgelenks bei Operationsnotwendigkeit.",k:"schultereckgelenk,ac gelenk,acg,tossy,akromioklavikular,acromioclavicular,schultereck"},
+{c:"7.4",t:"Skapulafraktur",s:"Brüche des Schulterblatts bei Operationsnotwendigkeit.",k:"skapula,scapula,schulterblatt,glenoid"},
+{c:"7.5",t:"Schultergelenk",v:"Verrenkungen/Verrenkungsbrüche, mehrfragmentäre Oberarmkopfbrüche bei Operationsnotwendigkeit, insb. mit traumatischer Rotatorenmanschettenruptur, Labrumabriss, Hill-Sachs-/Bankart-Läsion.",s:"Verrenkungsbrüche oder Oberarmkopfbrüche bei Gefäß-/Nervenverletzung, hochgradigem Weichteilschaden oder Indikation zum Gelenkersatz.",k:"schulter,humeruskopf,oberarmkopf,schulterluxation,luxation schulter,rotatorenmanschette,hill sachs,bankart,labrum,proximaler humerus,schulterverrenkung",n:"Einfacher Riss der Rotatorenmanschette ohne Luxation: DAV. Alte RM-Läsion mit Schulter-TEP: 11.3."},
+{c:"7.6",t:"Ellenbogengelenk",v:"Brüche oder Verrenkungen des Ellenbogengelenks bei Operationsnotwendigkeit.",s:"Bei Gefäß-/Nervenverletzung, hochgradigem Weichteilschaden oder Indikation zum Gelenkersatz (inkl. Radiuskopfprothese).",k:"ellenbogen,olekranon,radiuskopf,koronoid,ellenbogenluxation,radiuskopffraktur,monteggia",n:"Wurde vor der Op über einen möglichen Gelenkersatz aufgeklärt, liegt ein SAV-Fall vor."},
+{c:"7.7",t:"Distale Radiusfraktur",v:"Körperferne Speichenbrüche bei starker Verschiebung (Schaftbreite) oder Gelenkbeteiligung (AO C3).",k:"distaler radius,radiusfraktur,handgelenk,speiche,colles,smith,radiusextension,distal radius,radius distal"},
+{c:"7.8",t:"Distaler Femur",v:"Gelenkbetreffende Brüche des körperfernen Oberschenkels bei Operationsnotwendigkeit.",s:"Bei AO-Typ B3 oder C3, Gefäß-/Nervenverletzung, hochgradigem Weichteilschaden.",k:"distaler femur,femurkondyle,kniegelenk,suprakondylaer femur,femur distal,hoffa,oberschenkel knie"},
+{c:"7.9",t:"Vordere Kreuzbandinstabilität (kombiniert)",v:"Instabilität bei VKB-Verletzung in Kombination mit Seitenband-, Knorpel- oder Meniskusverletzung.",k:"vkb,vorderes kreuzband,kreuzbandruptur,kreuzband,unhappy triad,meniskus,seitenband,innenband,kniedistorsion,knie"},
+{c:"7.10",t:"Hinteres Kreuzband / Kniegelenksverrenkung",s:"Verletzungen des hinteren Kreuzbands, Kniegelenksverrenkungen mit Rupturen mehrerer Bandstrukturen oder knöchernen Begleitverletzungen.",k:"hkb,hinteres kreuzband,knieluxation,kniegelenksluxation,kniegelenksverrenkung,multiligament,bandverletzung knie",n:"Knieluxation mit isoliertem knöchernem VKB-Ausriss gehört nicht hierher."},
+{c:"7.11",t:"Tibiakopffraktur",v:"Brüche des körpernahen Unterschenkels mit Gelenkbeteiligung bei Operationsnotwendigkeit.",s:"Bei AO-Typ B3 oder C, Gefäß-/Nervenverletzung, hochgradigem Weichteilschaden.",k:"tibiakopf,schienbeinkopf,tibiaplateau,plateaufraktur,schatzker,proximale tibia"},
+{c:"7.12",t:"Patella",v:"Brüche der Kniescheibe; traumatische Patellaluxation mit Knorpel-Knochen-Abbruch bei Operationsnotwendigkeit.",k:"patella,kniescheibe,patellafraktur,patellaluxation,flake,knorpel"},
+{c:"7.13",t:"Distale Tibia (Pilon)",v:"Brüche des körperfernen Schienbeins mit Gelenkbeteiligung bei Operationsnotwendigkeit.",s:"Bei AO-Typ C, Gefäß-/Nervenverletzung, hochgradigem Weichteilschaden.",k:"pilon,pilonfraktur,distale tibia,tibia distal,schienbein distal,tibiapilon,plafond"},
+{c:"7.14",t:"Sprunggelenk / Knöchelgabel",v:"Brüche des Außenknöchels/Wadenbeins oder Verrenkungen der Knöchelgabel bei Riss des Zwischenknochenbandes (Weber C, AO B3/C), verschobenem Volkmann-Dreieck, Deltabandriss oder Innenknöchelbruch (eine Bedingung genügt).",s:"Bei Gefäß-/Nervenverletzung oder hochgradigem Weichteilschaden.",k:"sprunggelenk,osg,aussenknoechel,innenknoechel,knoechel,weber,syndesmose,syndesmosenruptur,deltaband,volkmann,trimalleolar,bimalleolar,malleolus,fibula,wadenbein,knoechelfraktur",n:"Die isolierte Syndesmosenverletzung ist eingeschlossen. Isolierter Weber A/B ohne diese Kriterien: DAV."},
+{c:"7.15",t:"Fußverletzung (Talus, Calcaneus, Fußwurzel)",v:"Brüche/Verrenkungen von Sprungbein, Fersenbein, Fußwurzel (inkl. instabile Lisfranc-Verletzung) bei Operationsnotwendigkeit.",s:"Bei Gefäß-/Nervenverletzung, hochgradigem Weichteilschaden, Fersenbein Sanders III/IV, Sprungbein Hawkins II–IV.",k:"talus,sprungbein,calcaneus,kalkaneus,fersenbein,fusswurzel,lisfranc,chopart,fuss,sanders,hawkins,mittelfuss"},
+{c:"8.1",t:"Handamputation",s:"Amputationen/Avulsionen inkl. Daumenendglied; ausgenommen singuläre Endgliedamputationen D2–D5.",k:"hand,finger,daumen,amputation,avulsion,fingeramputation,fingerkuppe,ringavulsion"},
+{c:"8.2",t:"Mittelhand und Finger",v:"Alle Brüche des ersten Mittelhandknochens; Langfinger-/Metakarpale 2–5 mit Gelenkbeteiligung, mehreren Strahlen oder schwerer Weichteilverletzung (1.5 V).",k:"mittelhand,metacarpale,metakarpale,mc,bennett,rolando,daumen,finger,phalanx,fingerfraktur,boxerfraktur,mittelhandknochen",n:"Fingerendglieder ohne Gelenkbeteiligung (Nagelkranzfraktur) sind ausgenommen."},
+{c:"8.3",t:"Handwurzel",v:"Brüche einzelner Handwurzelknochen bei Operationsnotwendigkeit.",s:"Bei Brüchen mehrerer Handwurzelknochen, Bandverletzungen, Verrenkungen, Verrenkungsbrüchen.",k:"handwurzel,skaphoid,kahnbein,lunatum,mondbein,karpal,perilunaer,sl band,scapholunaer,triquetrum,hamatum,handgelenk"},
+{c:"8.4",t:"Handnerven",s:"Verletzung von N. medianus, ulnaris, Ramus profundus, N. radialis, Fingernerven N1–N4 und N10 (Greifzone Daumen, Zeigefinger, Kleinfinger-Außenseite).",k:"hand,nerv,fingernerv,medianus,ulnaris,radialis,nervenverletzung hand,karpaltunnel"},
+{c:"8.5",t:"Gefäßverletzung Hand/Unterarm",s:"Gefäßverletzung an Fingern, Hand oder Unterarm mit akuten/drohenden Ernährungsstörungen, auch bei abzuklärender Operationsnotwendigkeit.",k:"hand,finger,gefaess,arterie,durchblutung,ernaehrungsstoerung,kapillarpuls,fingerarterie",n:"Gemeint: zwei arterielle Gefäße eines Fingers betroffen oder fehlender Kapillarpuls."},
+{c:"8.6",t:"Sehnenverletzung Hand/Unterarm",v:"Beugesehnen proximal der Zonen I–III; mehrere Strecksehnen.",s:"Beugesehnenverletzungen in den Zonen I–III (eine Sehne genügt).",k:"sehne,beugesehne,strecksehne,hand,finger,flexor,extensor,sehnenverletzung,sehnenruptur hand,zone"},
+{c:"8.7",t:"Handinfektion / Hochdruckeinspritzung",s:"Alle Handverletzungen (auch Unterarm) bei tiefgehenden oder ausgedehnten oder fortschreitenden Entzündungen; Hochdruckeinspritzverletzungen.",k:"hand,infektion,phlegmone,panaritium,hochdruck,einspritzung,injection,sehnenscheidenphlegmone,handinfekt,bissverletzung"},
+{c:"9.1",t:"Gesichtsschädel",v:"Brüche des Gesichtsschädels bei Operationsnotwendigkeit.",s:"Bei starker Verschiebung (Okklusionsstörung), hoher Komplexität (beidseitige Kiefer-, panfaziale Fraktur), hochgradigem Weichteilschaden (Tränenkanal, Amputation von Gesichtsanteilen, abgerissenes Ohr).",k:"gesicht,gesichtsschaedel,kiefer,unterkiefer,oberkiefer,mittelgesicht,orbita,jochbein,nasenbein,le fort,mandibula,maxilla,blow out,orbitabodenfraktur,panfazial"},
+{c:"9.2",t:"Wirbelsäule",v:"Wirbelbrüche mit Fehlstellung oder Instabilität bei Operationsnotwendigkeit (AO A2, A3, A4, B, C).",s:"Bei neurologischen Ausfällen oder notwendiger Rekonstruktion der vorderen Säule (untere HWS C3–C7, BWS, LWS); obere HWS (C0–C2/C3) bei Operationsnotwendigkeit.",k:"wirbel,wirbelsaeule,wirbelkoerper,bws,lws,hws,berstungsfraktur,densfraktur,dens,atlas,axis,hangman,wirbelfraktur,c1,c2,wirbelkoerperfraktur,kompressionsfraktur"},
+{c:"9.3",t:"Beckenring",v:"Beckenringbrüche mit Fehlstellung oder Instabilität bei Operationsnotwendigkeit.",s:"Bei hoher Instabilität (AO B3/C), Rekonstruktion des hinteren Beckenrings (Sakrum, ISG), Gefäß-/Nerven-/Organverletzung, hochgradigem Weichteilschaden.",k:"becken,beckenring,sakrum,kreuzbein,isg,iliosakral,symphyse,beckenringfraktur,os ilium,schambein,sitzbein,beckenfraktur"},
+{c:"9.4",t:"Hüftpfanne / Hüftluxation",v:"Brüche der Hüftpfanne oder Verrenkungen des Hüftgelenks bei Operationsnotwendigkeit.",s:"Bei Rekonstruktion der Hüftpfanne (Ein-/Zweipfeilerbruch), Kombination mit Beckenring, Gefäß-/Nervenverletzung, hochgradigem Weichteilschaden.",k:"acetabulum,hueftpfanne,pfanne,hueftluxation,hueftgelenk,hueftgelenksluxation,hueftverrenkung,pfeilerbruch,hueftkopfluxation"},
+{c:"10.1",t:"Polytrauma",v:"ISS zwischen 16 und 24.",s:"ISS ab 25 (Kinder ab 16); Verläufe mit Sepsis oder Organversagen, insb. bei Organersatzverfahren.",k:"polytrauma,iss,mehrfachverletzung,schwerverletzt,mehrfachverletzt"},
+{c:"10.2",t:"Verletzungskonstellation (SAV)",s:"Z. B. zwei oder mehr Extremitäten mit VAV-Ausprägung, keine simultane Belastbarkeit beider Beine (Rollstuhl-Mobilisation), erheblich erhöhter Rehabilitationsaufwand.",k:"beidseitig,beide beine,mehrere extremitaeten,rollstuhl,rehabilitationsaufwand,mehrfachverletzung"},
+{c:"10.3",t:"Kindertraumatologische Konstellation",kid:1,s:"Z. B. SHT II/III oder Impressionsfraktur, Organverletzung (Lungenkontusion, Herzkontusion), Abdominaltrauma mit Organverletzung, instabile Beckenfraktur, Frakturen von zwei langen Röhrenknochen der unteren Extremität, Intensivtherapie über 24 h.",k:"kind,kinder,sht,lungenkontusion,herzkontusion,abdominaltrauma,instabile beckenfraktur,intensiv"},
+{c:"10.4",t:"Verletzung mit relevanter Vorerkrankung",s:"VAV-Verletzungen kombiniert mit Erkrankungen, die Heilverlauf/Reha erheblich beeinflussen (z. B. schwere kardiale/pulmonale Vorerkrankung, Sehstörung).",k:"vorerkrankung,komorbiditaet,herzerkrankung,lungenerkrankung,sehstoerung"},
+{c:"11.1",t:"Infektionen / infektiöse Komplikationen",s:"Sepsis/Organversagen; tiefgehende, ausgedehnte oder fortschreitende postoperative Infektionen (auch des Implantats, bei Osteitis, auch bei Verdacht); Handinfektionen; Infektionen mit multiresistenten Keimen (MRE, MRSA, MRGN).",k:"infekt,infektion,wundinfekt,implantatinfekt,osteitis,osteomyelitis,sepsis,mrsa,mrgn,mre,fasziitis,empyem,protheseninfekt,postoperativ"},
+{c:"11.2",t:"Weichteildefektheilung",s:"Defektheilung des Weichteilmantels mit instabiler Narbe, Funktionsbehinderung oder entstellender Ästhetik nach Weichteiluntergang (z. B. nach Kompartmentsyndrom).",k:"narbe,defektheilung,weichteilnekrose,nekrose,narbenbildung,weichteiluntergang"},
+{c:"11.3",t:"Ausgedehnter Revisionseingriff",s:"U. a. bei Fehlstellung/Instabilität, unzureichender Osteosynthese, Knochenaufbau nach Osteitis, Gefäß-/Nervenläsion, Pseudarthrose, Beckenringfehlheilung, schmerzhafter Gelenkveränderung (Endoprothetik), Handwiederherstellung (Nerventransplantation, Sehnentransfer).",k:"revision,revisionseingriff,pseudarthrose,fehlheilung,materialversagen,osteosynthese,endoprothese,tep,prothese,posttraumatische arthrose,arthrose,achskorrektur,periprothetisch,periimplantaer,knochenheilungsstoerung,nonunion,korrekturosteotomie,sehnentransfer,nerventransplantation"},
+{c:"11.4",t:"Folgezustände beim Kind",kid:1,s:"Z. B. Ellenbogeneinsteifung, Fehlstellung/Wachstumsstörung nach Wachstumsfugenschaden, Beinlängendifferenz nach Fraktur der unteren Extremität.",k:"kind,wachstumsstoerung,beinlaengendifferenz,wachstumsfuge,einsteifung,fehlstellung"},
+{c:"11.5",t:"Spezielle Komplikationen / Unfallfolgen",s:"Chronische Schmerzsyndrome mit besonderer Behandlung, CRPS, Phantomschmerz nach Amputation, Schmerzen nach Nervenverletzung (länger als 4 Monate).",k:"crps,sudeck,schmerzsyndrom,phantomschmerz,chronischer schmerz,neuropathischer schmerz,morbus sudeck"}
+];
+const norm=s=>s.toLowerCase().replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+const STOP=new Set(["der","die","das","und","mit","bei","des","dem","von","ein","eine","distale","distaler","proximale","proximaler","rechts","links","offene","offener","geschlossene","komplette","komplexe"]);
+const SUF=/(frakturen|fraktur|bruch|brueche|verletzungen|verletzung|rupturen|ruptur|riss|luxation|verrenkung|syndrom|trauma)$/;
+D.forEach(d=>{d.h=" "+norm(d.t+" "+d.k.replace(/,/g," , "))+" ";d.kw=d.k.split(",").map(norm)});
+const out=document.getElementById("out"),q=document.getElementById("q"),kid=document.getElementById("kind");
+function esc(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function score(d,raw,toks){
+  let s=0;
+  for(const kw of d.kw){if(kw.length>2&&raw.includes(kw))s+=kw.length>=6?6:3}
+  for(const t of toks){
+    if(STOP.has(t))continue;
+    let st=t.replace(SUF,"");if(st.length<3)st=t;
+    if(d.kw.includes(t)||d.kw.includes(st))s+=3;
+    else if(st.length>=4&&d.h.includes(st))s+=2;
+    else if(st.length>=5&&d.h.includes(st.slice(0,5)))s+=0.5;
+  }
+  if(kid.checked&&d.kid&&s>0)s+=3;
+  if(!kid.checked&&d.kid&&s>0)s-=1.5;
+  return s;
+}
+function card(d,flag){
+  const only=!d.v;
+  let h=`<article class="res${only?" onlyS":""}"><div class="hd"><span class="code">${only?"SAV":"VAV"} ${d.c}</span><span class="ttl">${esc(d.t)}</span></div>`;
+  if(d.v)h+=`<div class="lv v"><b>VAV ${d.c} (V)</b>${esc(d.v)}</div>`;
+  if(d.s)h+=`<div class="lv s"><b>SAV ${d.c} (S)${d.v?" bei Verschärfung":""}</b>${esc(d.s)}</div>`;
+  if(d.n)h+=`<div class="note">${esc(d.n)}</div>`;
+  if(flag)h+=`<div class="note">Dies ist ein Katalogeintrag für Kinder.</div>`;
+  return h+"</article>";
+}
+function run(){
+  const raw=norm(q.value);
+  if(raw.length<2){out.innerHTML="";return}
+  const toks=raw.split(" ").filter(t=>t.length>=3);
+  const r=D.map(d=>({d,s:score(d,raw,toks)})).filter(x=>x.s>=2).sort((a,b)=>b.s-a.s).slice(0,4);
+  if(!r.length){out.innerHTML=`<div class="empty"><b>Kein Treffer im Verzeichnis.</b><br>Versuche einen anderen Begriff (Lokalisation oder Bruchform) oder prüfe, ob die Verletzung unter das DAV fällt.</div>`;return}
+  out.innerHTML=r.map(x=>card(x.d)).join("");
+}
+q.addEventListener("input",run);kid.addEventListener("change",run);
+const ch=document.getElementById("chips");
+["Schenkelhalsfraktur","Sprunggelenkfraktur","Kahnbeinfraktur","Tibiakopffraktur","Kreuzbandruptur","Beckenringfraktur","Rippenserienfraktur","Kompartmentsyndrom"].forEach(t=>{
+  const b=document.createElement("button");b.type="button";b.textContent=t;b.onclick=()=>{q.value=t;run();q.focus()};ch.appendChild(b)});
+</script>
+</body>
+</html>
